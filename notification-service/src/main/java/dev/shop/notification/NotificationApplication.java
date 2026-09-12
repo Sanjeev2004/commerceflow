@@ -1,0 +1,5 @@
+package dev.shop.notification;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+@SpringBootApplication(scanBasePackages={"dev.shop.notification","dev.shop.common"})
+public class NotificationApplication { public static void main(String[] args) { SpringApplication.run(NotificationApplication.class,args); } }

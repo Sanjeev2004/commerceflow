@@ -1,0 +1,39 @@
+name: Verify commerce
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ADMIN_EMAIL: ci-admin@example.com
+      ADMIN_PASSWORD: CI-integration-password-123!
+      JWT_SECRET: CI-only-signing-key-at-least-thirty-two-bytes
+      POSTGRES_PASSWORD: ci-database-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build and unit tests
+        run: mvn -B -ntp verify -DskipITs
+      - name: Start full stack from source
+        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: Black-box integration tests
+        run: mvn -B -ntp -pl integration-tests verify
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --no-color
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/*
+            **/target/failsafe-reports/*
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v

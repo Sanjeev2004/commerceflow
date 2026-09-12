@@ -1,0 +1,8 @@
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    email VARCHAR(254) NOT NULL UNIQUE,
+    password_hash VARCHAR(100) NOT NULL,
+    role VARCHAR(16) NOT NULL CHECK (role IN ('CUSTOMER','ADMIN')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

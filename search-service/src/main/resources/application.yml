@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: search-service
+  config:
+    import: classpath:commerce-defaults.yml
+server:
+  port: ${PORT:8086}
+commerce:
+  messaging:
+    enabled: true
+  elasticsearch-url: ${ELASTICSEARCH_URL:http://localhost:9200}

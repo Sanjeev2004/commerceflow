@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: order-service
+  config:
+    import: classpath:commerce-defaults.yml
+server:
+  port: ${PORT:8084}
+commerce:
+  messaging:
+    enabled: true
+  product-url: ${PRODUCT_URL:http://localhost:8082}

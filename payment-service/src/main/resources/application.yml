@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: payment-service
+  config:
+    import: classpath:commerce-defaults.yml
+server:
+  port: ${PORT:8085}
+commerce:
+  messaging:
+    enabled: true

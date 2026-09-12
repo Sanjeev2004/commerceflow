@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'commerce-services'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+          - 'gateway:9090'
+          - 'auth-service:9090'
+          - 'product-service:9090'
+          - 'inventory-service:9090'
+          - 'order-service:9090'
+          - 'payment-service:9090'
+          - 'search-service:9090'
+          - 'notification-service:9090'
+        labels:
+          environment: 'docker-compose'

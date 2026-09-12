@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: notification-service
+  config:
+    import: classpath:commerce-defaults.yml
+server:
+  port: ${PORT:8087}
+commerce:
+  messaging:
+    enabled: true
