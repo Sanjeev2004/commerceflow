@@ -38,4 +38,8 @@ public class AuthService {
                 .issuedAt(now).expiresAt(now.plusSeconds(900)).claim("roles",List.of(user.get().role())).build();
         return new Token(encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),claims)).getTokenValue(),"Bearer",900);
     }
+    public UserView me(UUID userId) {
+        var user = users.byId(userId).orElseThrow(() -> ApiException.notFound("User not found"));
+        return new UserView(user.id(), user.email(), user.role());
+    }
 }

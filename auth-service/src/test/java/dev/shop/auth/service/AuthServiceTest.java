@@ -29,4 +29,31 @@ class AuthServiceTest {
         assertEquals(HttpStatus.UNAUTHORIZED, error.status());
         verifyNoInteractions(encoder);
     }
+
+    @Test void meReturnsUserProfileWhenFound() {
+        var users = mock(UserRepository.class);
+        var encoder = mock(JwtEncoder.class);
+        var passwords = new BCryptPasswordEncoder(4);
+        var userId = UUID.randomUUID();
+        when(users.byId(userId)).thenReturn(Optional.of(new UserAccount(
+                userId, "user@example.com", "hash", "CUSTOMER")));
+        var auth = new AuthService(users, passwords, encoder);
+
+        var profile = auth.me(userId);
+        assertEquals(userId, profile.id());
+        assertEquals("user@example.com", profile.email());
+        assertEquals("CUSTOMER", profile.role());
+    }
+
+    @Test void meThrowsNotFoundWhenUserDoesNotExist() {
+        var users = mock(UserRepository.class);
+        var encoder = mock(JwtEncoder.class);
+        var passwords = new BCryptPasswordEncoder(4);
+        var userId = UUID.randomUUID();
+        when(users.byId(userId)).thenReturn(Optional.empty());
+        var auth = new AuthService(users, passwords, encoder);
+
+        var error = assertThrows(ApiException.class, () -> auth.me(userId));
+        assertEquals(HttpStatus.NOT_FOUND, error.status());
+    }
 }

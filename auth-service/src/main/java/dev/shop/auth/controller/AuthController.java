@@ -12,4 +12,8 @@ public class AuthController {
     @PostMapping("/register") @ResponseStatus(HttpStatus.CREATED)
     public UserView register(@Valid @RequestBody Credentials input) { return auth.register(input); }
     @PostMapping("/login") public Token login(@Valid @RequestBody Credentials input) { return auth.login(input); }
+    @GetMapping("/me")
+    public UserView me(@org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.oauth2.jwt.Jwt jwt) {
+        return auth.me(java.util.UUID.fromString(jwt.getSubject()));
+    }
 }

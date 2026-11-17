@@ -1,0 +1,241 @@
+# Lightweight Development Compose File
+# Uses a single PostgreSQL instance with 7 isolated databases instead of 7 heavy separate PostgreSQL containers.
+# Saves ~1.5 GB RAM and starts up in under 60 seconds.
+# Usage: docker compose -f docker-compose.dev.yml up -d --build
+
+services:
+  # ── Infrastructure (Consolidated) ───────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: commerce_master
+    ports: ['5432:5432']
+    volumes:
+      - ./scripts/init-multi-db.sh:/docker-entrypoint-initdb.d/init-multi-db.sh:ro
+      - pg-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U commerce -d commerce_master"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports: ['6379:6379']
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 0
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    ports: ['29092:29092']
+    volumes: ['kafka-dev-data:/var/lib/kafka/data']
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      ES_JAVA_OPTS: "-Xms384m -Xmx384m"
+    ports: ['9200:9200']
+    volumes: ['search-dev-data:/usr/share/elasticsearch/data']
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  # ── Application Services ────────────────────────────────
+  auth-service:
+    mem_limit: 384m
+    build:
+      context: .
+      args: { SERVICE: auth-service }
+    ports: ['8081:8081', '9081:9090']
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/auth_db
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string!!}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      MANAGEMENT_SERVER_PORT: 9090
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  product-service:
+    mem_limit: 384m
+    build:
+      context: .
+      args: { SERVICE: product-service }
+    ports: ['8082:8082', '9082:9090']
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/product_db
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string!!}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MANAGEMENT_SERVER_PORT: 9090
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    restart: unless-stopped
+
+  inventory-service:
+    mem_limit: 384m
+    build:
+      context: .
+      args: { SERVICE: inventory-service }
+    ports: ['8083:8083', '9083:9090']
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/inventory_db
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string!!}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MANAGEMENT_SERVER_PORT: 9090
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    restart: unless-stopped
+
+  order-service:
+    mem_limit: 384m
+    build:
+      context: .
+      args: { SERVICE: order-service }
+    ports: ['8084:8084', '9084:9090']
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/order_db
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string!!}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      PRODUCT_URL: http://product-service:8082
+      MANAGEMENT_SERVER_PORT: 9090
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      product-service: { condition: service_started }
+    restart: unless-stopped
+
+  payment-service:
+    mem_limit: 384m
+    build:
+      context: .
+      args: { SERVICE: payment-service }
+    ports: ['8085:8085', '9085:9090']
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/payment_db
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string!!}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MANAGEMENT_SERVER_PORT: 9090
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    restart: unless-stopped
+
+  search-service:
+    mem_limit: 384m
+    build:
+      context: .
+      args: { SERVICE: search-service }
+    ports: ['8086:8086', '9086:9090']
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/search_db
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string!!}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      MANAGEMENT_SERVER_PORT: 9090
+    depends_on:
+      elasticsearch: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  notification-service:
+    mem_limit: 384m
+    build:
+      context: .
+      args: { SERVICE: notification-service }
+    ports: ['8087:8087', '9087:9090']
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/notification_db
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string!!}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MANAGEMENT_SERVER_PORT: 9090
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    restart: unless-stopped
+
+  gateway:
+    mem_limit: 384m
+    build:
+      context: .
+      args: { SERVICE: gateway }
+    ports: ['8080:8080', '9080:9090']
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string!!}
+      REDIS_HOST: redis
+      AUTH_URL: http://auth-service:8081
+      PRODUCT_URL: http://product-service:8082
+      INVENTORY_URL: http://inventory-service:8083
+      ORDER_URL: http://order-service:8084
+      PAYMENT_URL: http://payment-service:8085
+      SEARCH_URL: http://search-service:8086
+      NOTIFICATION_URL: http://notification-service:8087
+      MANAGEMENT_SERVER_PORT: 9090
+    depends_on:
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      product-service: { condition: service_started }
+    restart: unless-stopped
+
+volumes:
+  pg-dev-data:
+  kafka-dev-data:
+  search-dev-data:

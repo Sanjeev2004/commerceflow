@@ -10,6 +10,19 @@ spring:
       connect-timeout: 500ms
   cloud:
     gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
       httpclient:
         connect-timeout: 2000
         response-timeout: 5s

@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CommerceFlow | Distributed Microservices E-Commerce</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: { 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-card { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.06); }
+    .badge-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none"></div>
+
+  <!-- Header / Navigation -->
+  <header class="glass sticky top-0 z-40 border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent">CommerceFlow</span>
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Microservices</span>
+          </div>
+          <p class="text-xs text-slate-400 hidden sm:block">Kafka Saga Orchestration • Outbox Pattern • Spring Boot 3.4</p>
+        </div>
+      </div>
+
+      <!-- Search bar -->
+      <div class="flex-1 max-w-md relative hidden md:block">
+        <input type="text" id="searchInput" placeholder="Search catalog via Elasticsearch..." 
+          class="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-4 py-2 pl-10 text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+        <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+      </div>
+
+      <!-- Action items -->
+      <div class="flex items-center gap-3">
+        <!-- User Status / Login Button -->
+        <div id="authContainer" class="flex items-center gap-2">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Cart Button -->
+        <button id="cartBtn" class="relative p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+          <span id="cartBadge" class="absolute -top-1.5 -right-1.5 bg-indigo-500 text-white font-bold text-xs w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 hidden">0</span>
+        </button>
+
+        <!-- System Architecture Modal Toggle -->
+        <button id="archBtn" title="View System Architecture & Monitoring" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sub-bar: Category Tabs & Admin Tools -->
+  <div class="bg-slate-900/60 border-b border-slate-800/80 px-4 sm:px-6 lg:px-8 py-2.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0" id="categoryPills">
+        <button data-cat="" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-indigo-600 text-white transition">All Categories</button>
+        <button data-cat="electronics" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">Electronics</button>
+        <button data-cat="apparel" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">Apparel</button>
+        <button data-cat="home" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">Home</button>
+        <button data-cat="integration" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">Integration Fixtures</button>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="flex items-center gap-1.5 text-emerald-400 font-mono">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 badge-pulse"></span>
+          Gateway :8080 Active
+        </span>
+        <button id="adminNewProductBtn" class="hidden px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition text-xs flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Add Product
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main View Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8">
+    
+    <!-- Hero / Architecture Banner -->
+    <div class="rounded-2xl p-6 relative overflow-hidden bg-gradient-to-r from-indigo-950/70 via-slate-900 to-slate-900 border border-indigo-500/20 shadow-2xl">
+      <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+        <div class="max-w-xl">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-xs font-mono font-medium mb-3">
+            <span>Distributed Checkout Saga</span>
+            <span>•</span>
+            <span>Idempotent REST APIs</span>
+          </div>
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Full-Stack Microservices Storefront</h1>
+          <p class="mt-2 text-sm text-slate-300 leading-relaxed">
+            Test real-world distributed transactions powered by Kafka event choreography, transactional outbox relays, and automatic compensation on payment failures.
+          </p>
+        </div>
+        
+        <!-- Live Quick Demo Controls -->
+        <div class="glass-card rounded-xl p-4 flex flex-col gap-3 min-w-[280px]">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Quick Test Personas</span>
+          <div class="flex gap-2">
+            <button id="quickLoginAdmin" class="flex-1 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-indigo-300 border border-indigo-500/30 transition text-center">
+              🔑 Admin Login
+            </button>
+            <button id="quickCreateCustomer" class="flex-1 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white shadow-lg shadow-indigo-600/30 transition text-center">
+              👤 New Customer
+            </button>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800 pt-2 font-mono">
+            <span>Rate Limiter: Token Bucket</span>
+            <span class="text-emerald-400">Redis 7</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Saga Order Progress Box (Displays when an order is in flight) -->
+    <div id="sagaTracker" class="hidden glass-card rounded-2xl p-6 border-indigo-500/40 relative overflow-hidden">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-indigo-500 badge-pulse"></span>
+          <h3 class="text-base font-bold text-white">Distributed Checkout Saga in Progress</h3>
+          <span id="sagaOrderId" class="font-mono text-xs text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800"></span>
+        </div>
+        <button id="closeSagaTracker" class="text-slate-400 hover:text-white text-sm">✕</button>
+      </div>
+
+      <!-- Step Pipeline -->
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 my-4">
+        <div id="step-created" class="p-3 rounded-xl bg-slate-800/80 border border-slate-700 flex flex-col gap-1 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-300">1. Order Service</span>
+            <span class="step-icon text-xs">⏳</span>
+          </div>
+          <p class="text-[11px] text-slate-400">Order recorded & outbox staged</p>
+        </div>
+        <div id="step-inventory" class="p-3 rounded-xl bg-slate-800/80 border border-slate-700 flex flex-col gap-1 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-300">2. Inventory Service</span>
+            <span class="step-icon text-xs">⏳</span>
+          </div>
+          <p class="text-[11px] text-slate-400">Atomic stock reservation</p>
+        </div>
+        <div id="step-payment" class="p-3 rounded-xl bg-slate-800/80 border border-slate-700 flex flex-col gap-1 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-300">3. Payment Service</span>
+            <span class="step-icon text-xs">⏳</span>
+          </div>
+          <p class="text-[11px] text-slate-400">Simulator processing</p>
+        </div>
+        <div id="step-terminal" class="p-3 rounded-xl bg-slate-800/80 border border-slate-700 flex flex-col gap-1 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-300">4. Settlement</span>
+            <span class="step-icon text-xs">⏳</span>
+          </div>
+          <p class="text-[11px] text-slate-400">Commit or Compensate</p>
+        </div>
+      </div>
+
+      <div id="sagaStatusDetail" class="text-xs font-mono p-3 rounded-lg bg-slate-900/90 border border-slate-800 text-slate-300 flex items-center justify-between">
+        <span>Awaiting message delivery via Kafka...</span>
+        <span id="sagaTimer" class="text-indigo-400">0s elapsed</span>
+      </div>
+    </div>
+
+    <!-- Products Grid Section -->
+    <div>
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Available Products</h2>
+          <p class="text-xs text-slate-400" id="productCountLabel">Loading catalog...</p>
+        </div>
+        <button id="refreshProductsBtn" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Refresh Products">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+      </div>
+
+      <div id="productsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+    <!-- Orders & Notifications Section (Tabs) -->
+    <div id="userActivitySection" class="hidden flex flex-col gap-4">
+      <div class="border-b border-slate-800 flex gap-6 text-sm font-semibold">
+        <button id="tabOrdersBtn" class="pb-3 text-indigo-400 border-b-2 border-indigo-500">My Orders</button>
+        <button id="tabNotificationsBtn" class="pb-3 text-slate-400 hover:text-slate-200">Event Notifications</button>
+      </div>
+
+      <div id="ordersTabContent">
+        <div id="ordersList" class="flex flex-col gap-3"></div>
+      </div>
+
+      <div id="notificationsTabContent" class="hidden">
+        <div id="notificationsList" class="flex flex-col gap-3"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Cart Sidebar Drawer -->
+  <div id="cartDrawer" class="fixed inset-0 z-50 overflow-hidden hidden">
+    <div id="cartBackdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity"></div>
+    <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
+      <div class="w-screen max-w-md bg-slate-900 border-l border-slate-800 p-6 flex flex-col justify-between shadow-2xl">
+        <div>
+          <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+            <div class="flex items-center gap-2">
+              <h2 class="text-lg font-bold text-white">Your Cart</h2>
+              <span id="cartCountBadge" class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">0 items</span>
+            </div>
+            <button id="closeCartBtn" class="text-slate-400 hover:text-white p-1">✕</button>
+          </div>
+
+          <div id="cartItemsList" class="divide-y divide-slate-800/80 my-4 max-h-[45vh] overflow-y-auto pr-2">
+            <!-- Items rendered via JS -->
+          </div>
+        </div>
+
+        <div class="border-t border-slate-800 pt-4 flex flex-col gap-4">
+          <div class="flex items-center justify-between text-base font-bold text-white">
+            <span>Total</span>
+            <span id="cartTotal" class="text-xl font-mono text-indigo-400">$0.00</span>
+          </div>
+
+          <!-- Payment Simulator Mode Selection -->
+          <div class="bg-slate-800/60 rounded-xl p-3 border border-slate-700/60 flex flex-col gap-2">
+            <label class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+              <span>Saga Payment Mode</span>
+              <span class="text-[10px] text-indigo-400 lowercase font-mono">payment-service</span>
+            </label>
+            <select id="checkoutPaymentMode" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+              <option value="SUCCESS">SUCCESS (Happy path: Order Confirmed)</option>
+              <option value="DECLINE">DECLINE (Simulation: Payment declined & stock compensated)</option>
+              <option value="CANCEL">CANCEL (Simulation: User cancelled & stock released)</option>
+            </select>
+          </div>
+
+          <button id="checkoutBtn" class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+            <span>Execute Saga Checkout</span>
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login / Register Modal -->
+  <div id="authModal" class="fixed inset-0 z-50 overflow-hidden hidden flex items-center justify-center p-4">
+    <div id="authBackdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"></div>
+    <div class="glass-card rounded-2xl p-6 max-w-sm w-full relative z-10 border border-slate-700">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="authModalTitle" class="text-lg font-bold text-white">Sign In</h3>
+        <button id="closeAuthModal" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <div class="flex border-b border-slate-800 mb-4 text-xs font-semibold">
+        <button id="authTabLogin" class="pb-2 text-indigo-400 border-b-2 border-indigo-500 flex-1">Login</button>
+        <button id="authTabRegister" class="pb-2 text-slate-400 hover:text-slate-200 flex-1">Register</button>
+      </div>
+
+      <form id="authForm" class="flex flex-col gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Email</label>
+          <input type="email" id="authEmail" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Password (min 12 chars)</label>
+          <input type="password" id="authPassword" required minlength="12" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <button type="submit" id="authSubmitBtn" class="mt-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Architecture & Observability Modal -->
+  <div id="archModal" class="fixed inset-0 z-50 overflow-hidden hidden flex items-center justify-center p-4">
+    <div id="archBackdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"></div>
+    <div class="glass-card rounded-2xl p-6 max-w-2xl w-full relative z-10 border border-slate-700 max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <span>🏛️</span>
+          <span>System Topology & Observability</span>
+        </h3>
+        <button id="closeArchModal" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <div class="flex flex-col gap-4 text-xs text-slate-300">
+        <div class="p-3 rounded-xl bg-slate-800/80 border border-slate-700">
+          <span class="font-bold text-white text-sm">Choreographed Saga Architecture:</span>
+          <pre class="mt-2 text-[11px] font-mono text-indigo-300 bg-slate-900/90 p-2.5 rounded-lg overflow-x-auto">
+Client -> Gateway (:8080)
+             │
+             ├── Auth Service       (:8081) - JWT validation
+             ├── Product Service    (:8082) - Catalog & Redis cache
+             ├── Inventory Service  (:8083) - Stock reservation
+             ├── Order Service      (:8084) - Saga orchestrator
+             ├── Payment Service    (:8085) - Payment outcome
+             ├── Search Service     (:8086) - Elasticsearch 8
+             └── Notification Svc   (:8087) - Customer inboxes
+             │
+        Transactional Outbox ──▶ Kafka (commerce.events)
+          </pre>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <a href="http://localhost:9091" target="_blank" class="p-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700 transition flex items-center justify-between">
+            <div>
+              <span class="font-bold text-white block">Prometheus</span>
+              <span class="text-slate-400 text-[10px]">Port 9091 • Metrics scraper</span>
+            </div>
+            <span class="text-indigo-400">↗</span>
+          </a>
+          <a href="http://localhost:3000" target="_blank" class="p-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700 transition flex items-center justify-between">
+            <div>
+              <span class="font-bold text-white block">Grafana Dashboards</span>
+              <span class="text-slate-400 text-[10px]">Port 3000 • Commerce Overview</span>
+            </div>
+            <span class="text-indigo-400">↗</span>
+          </a>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700 flex flex-col gap-2">
+          <span class="font-bold text-white">Swagger UI Endpoints (per-service):</span>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-[11px]">
+            <a href="http://localhost:8081/swagger-ui/index.html" target="_blank" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300">Auth :8081</a>
+            <a href="http://localhost:8082/swagger-ui/index.html" target="_blank" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300">Product :8082</a>
+            <a href="http://localhost:8083/swagger-ui/index.html" target="_blank" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300">Inventory :8083</a>
+            <a href="http://localhost:8084/swagger-ui/index.html" target="_blank" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300">Order :8084</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Restock Modal -->
+  <div id="restockModal" class="fixed inset-0 z-50 overflow-hidden hidden flex items-center justify-center p-4">
+    <div id="restockBackdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"></div>
+    <div class="glass-card rounded-2xl p-6 max-w-sm w-full relative z-10 border border-slate-700">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-white">Restock Inventory</h3>
+        <button id="closeRestockModal" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <form id="restockForm" class="flex flex-col gap-3">
+        <input type="hidden" id="restockProductId">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Product</label>
+          <input type="text" id="restockProductName" readonly class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-400">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Quantity to Add</label>
+          <input type="number" id="restockQuantity" min="1" max="1000" value="10" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <button type="submit" class="mt-2 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition">
+          Submit Restock (Idempotent)
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Create Product Modal -->
+  <div id="createProductModal" class="fixed inset-0 z-50 overflow-hidden hidden flex items-center justify-center p-4">
+    <div id="createProductBackdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"></div>
+    <div class="glass-card rounded-2xl p-6 max-w-md w-full relative z-10 border border-slate-700">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-white">Create New Product</h3>
+        <button id="closeCreateProductModal" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <form id="createProductForm" class="flex flex-col gap-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">SKU</label>
+            <input type="text" id="prodSku" placeholder="e.g. KB-999" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Category</label>
+            <input type="text" id="prodCategory" placeholder="electronics" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Product Name</label>
+          <input type="text" id="prodName" placeholder="Wireless Mechanical Keyboard" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Description</label>
+          <textarea id="prodDesc" rows="2" placeholder="RGB backlit, hot-swappable switches..." required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Price ($)</label>
+            <input type="number" id="prodPrice" step="0.01" min="0.01" placeholder="89.99" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Initial Stock</label>
+            <input type="number" id="prodInitialStock" min="0" value="10" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+        <button type="submit" class="mt-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition">
+          Publish Product
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Application Logic JS -->
+  <script>
+    const API = {
+      base: window.location.origin,
+      token: localStorage.getItem('cf_token') || '',
+      user: JSON.parse(localStorage.getItem('cf_user') || 'null'),
+      cart: JSON.parse(localStorage.getItem('cf_cart') || '[]'),
+      products: [],
+
+      async request(method, path, body = null, key = null) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+        if (key) headers['Idempotency-Key'] = key;
+        headers['X-Correlation-ID'] = 'web-' + crypto.randomUUID();
+
+        const options = { method, headers };
+        if (body) options.body = JSON.stringify(body);
+
+        try {
+          const res = await fetch(`${this.base}${path}`, options);
+          const contentType = res.headers.get('content-type') || '';
+          const data = contentType.includes('application/json') || contentType.includes('problem+json') 
+            ? await res.json() : await res.text();
+
+          if (!res.ok) {
+            const errorMsg = data && data.detail ? data.detail : (data && data.message ? data.message : `HTTP ${res.status}`);
+            throw new Error(errorMsg);
+          }
+          return data;
+        } catch (err) {
+          throw err;
+        }
+      },
+
+      setAuth(token, user) {
+        this.token = token;
+        this.user = user;
+        localStorage.setItem('cf_token', token);
+        localStorage.setItem('cf_user', JSON.stringify(user));
+        renderAuth();
+        if (user && user.role === 'ADMIN') {
+          document.getElementById('adminNewProductBtn').classList.remove('hidden');
+        } else {
+          document.getElementById('adminNewProductBtn').classList.add('hidden');
+        }
+        if (user) {
+          document.getElementById('userActivitySection').classList.remove('hidden');
+          loadOrders();
+          loadNotifications();
+        } else {
+          document.getElementById('userActivitySection').classList.add('hidden');
+        }
+      },
+
+      logout() {
+        this.token = '';
+        this.user = null;
+        localStorage.removeItem('cf_token');
+        localStorage.removeItem('cf_user');
+        renderAuth();
+        document.getElementById('adminNewProductBtn').classList.add('hidden');
+        document.getElementById('userActivitySection').classList.add('hidden');
+        showToast('Signed out successfully');
+      }
+    };
+
+    function showToast(msg, isError = false) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `p-3 rounded-xl text-xs font-medium border shadow-xl flex items-center justify-between pointer-events-auto transform transition-all duration-300 ${
+        isError ? 'bg-rose-950/90 border-rose-800 text-rose-200' : 'bg-slate-800/95 border-slate-700 text-slate-200'
+      }`;
+      toast.innerHTML = `<span>${msg}</span><button onclick="this.parentElement.remove()" class="ml-2 text-slate-400 hover:text-white">✕</button>`;
+      container.appendChild(toast);
+      setTimeout(() => { toast.remove(); }, 4000);
+    }
+
+    function renderAuth() {
+      const el = document.getElementById('authContainer');
+      if (API.user) {
+        el.innerHTML = `
+          <div class="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700">
+            <span class="w-2 h-2 rounded-full ${API.user.role === 'ADMIN' ? 'bg-amber-400' : 'bg-emerald-400'}"></span>
+            <span class="text-xs font-mono text-slate-200 truncate max-w-[120px]">${API.user.email}</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 font-bold">${API.user.role}</span>
+            <button onclick="API.logout()" class="ml-1 text-slate-400 hover:text-rose-400 text-xs font-bold" title="Logout">✕</button>
+          </div>
+        `;
+      } else {
+        el.innerHTML = `
+          <button onclick="openAuthModal('LOGIN')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition">
+            Sign In
+          </button>
+        `;
+      }
+    }
+
+    async function loadProducts(category = '') {
+      const label = document.getElementById('productCountLabel');
+      label.innerText = 'Fetching latest catalog...';
+      try {
+        const path = category ? `/api/products?category=${encodeURIComponent(category)}` : '/api/products';
+        const res = await API.request('GET', path);
+        API.products = res.content || [];
+        label.innerText = `Showing ${API.products.length} products`;
+        renderProducts(API.products);
+      } catch (err) {
+        label.innerText = 'Failed to load catalog';
+        showToast('Error loading products: ' + err.message, true);
+      }
+    }
+
+    function renderProducts(list) {
+      const grid = document.getElementById('productsGrid');
+      if (!list || list.length === 0) {
+        grid.innerHTML = `<div class="col-span-full py-12 text-center text-slate-400 text-sm">No products found in this category.</div>`;
+        return;
+      }
+
+      grid.innerHTML = list.map(p => `
+        <div class="glass-card rounded-2xl p-5 flex flex-col justify-between hover:border-indigo-500/40 transition group">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span class="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">${p.category}</span>
+              <span class="text-[10px] font-mono text-slate-400">${p.sku}</span>
+            </div>
+            <h3 class="text-base font-bold text-white group-hover:text-indigo-300 transition">${p.name}</h3>
+            <p class="mt-1 text-xs text-slate-400 line-clamp-2">${p.description}</p>
+          </div>
+
+          <div class="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between">
+            <span class="text-lg font-extrabold font-mono text-white">$${Number(p.price).toFixed(2)}</span>
+            <div class="flex items-center gap-2">
+              ${API.user && API.user.role === 'ADMIN' ? `
+                <button onclick="openRestockModal('${p.id}', '${p.name}')" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 text-xs font-bold" title="Restock Stock">
+                  +📦
+                </button>
+              ` : ''}
+              <button onclick="addToCart('${p.id}')" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center gap-1">
+                <span>+ Cart</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addToCart(productId) {
+      const product = API.products.find(p => p.id === productId);
+      if (!product) return;
+      const existing = API.cart.find(c => c.productId === productId);
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        API.cart.push({ productId: product.id, name: product.name, price: product.price, sku: product.sku, quantity: 1 });
+      }
+      saveCart();
+      showToast(`Added "${product.name}" to cart`);
+    }
+
+    function saveCart() {
+      localStorage.setItem('cf_cart', JSON.stringify(API.cart));
+      updateCartBadge();
+    }
+
+    function updateCartBadge() {
+      const totalCount = API.cart.reduce((s, i) => s + i.quantity, 0);
+      const badge = document.getElementById('cartBadge');
+      if (totalCount > 0) {
+        badge.innerText = totalCount;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+      document.getElementById('cartCountBadge').innerText = `${totalCount} item${totalCount === 1 ? '' : 's'}`;
+    }
+
+    function renderCartDrawer() {
+      const list = document.getElementById('cartItemsList');
+      if (API.cart.length === 0) {
+        list.innerHTML = `<div class="py-12 text-center text-slate-400 text-sm">Your cart is currently empty.</div>`;
+        document.getElementById('cartTotal').innerText = '$0.00';
+        document.getElementById('checkoutBtn').disabled = true;
+        return;
+      }
+
+      document.getElementById('checkoutBtn').disabled = false;
+      let total = 0;
+      list.innerHTML = API.cart.map((item, idx) => {
+        const itemTotal = item.price * item.quantity;
+        total += itemTotal;
+        return `
+          <div class="py-3 flex items-center justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <h4 class="text-xs font-bold text-white truncate">${item.name}</h4>
+              <span class="text-[11px] font-mono text-slate-400">$${Number(item.price).toFixed(2)} each</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="changeCartQty(${idx}, -1)" class="w-6 h-6 rounded bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 flex items-center justify-center text-xs">-</button>
+              <span class="font-mono text-xs w-5 text-center">${item.quantity}</span>
+              <button onclick="changeCartQty(${idx}, 1)" class="w-6 h-6 rounded bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 flex items-center justify-center text-xs">+</button>
+              <span class="font-mono text-xs text-indigo-300 w-16 text-right">$${itemTotal.toFixed(2)}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('cartTotal').innerText = `$${total.toFixed(2)}`;
+    }
+
+    function changeCartQty(idx, delta) {
+      if (!API.cart[idx]) return;
+      API.cart[idx].quantity += delta;
+      if (API.cart[idx].quantity <= 0) API.cart.splice(idx, 1);
+      saveCart();
+      renderCartDrawer();
+    }
+
+    // Distributed Saga Checkout Execution
+    async function executeSagaCheckout() {
+      if (!API.token) {
+        openAuthModal('LOGIN');
+        showToast('Please sign in or create a customer to checkout', true);
+        return;
+      }
+      if (API.cart.length === 0) return;
+
+      const btn = document.getElementById('checkoutBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="badge-pulse">Dispatching Saga...</span>`;
+
+      const paymentMode = document.getElementById('checkoutPaymentMode').value;
+      const idempotencyKey = crypto.randomUUID();
+      const items = API.cart.map(c => ({ productId: c.productId, quantity: c.quantity }));
+
+      try {
+        const order = await API.request('POST', '/api/orders', { items, paymentMode }, idempotencyKey);
+        showToast(`Order accepted: ${order.id}`);
+        // Clear cart
+        API.cart = [];
+        saveCart();
+        renderCartDrawer();
+        document.getElementById('cartDrawer').classList.add('hidden');
+
+        // Start Saga Tracking in UI
+        startSagaTracking(order.id, paymentMode);
+      } catch (err) {
+        showToast('Checkout failed: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<span>Execute Saga Checkout</span>`;
+      }
+    }
+
+    let sagaPollTimer = null;
+    function startSagaTracking(orderId, paymentMode) {
+      const tracker = document.getElementById('sagaTracker');
+      tracker.classList.remove('hidden');
+      document.getElementById('sagaOrderId').innerText = orderId;
+
+      const resetStep = (id) => {
+        const el = document.getElementById(id);
+        el.className = 'p-3 rounded-xl bg-slate-800/80 border border-slate-700 flex flex-col gap-1 transition';
+        el.querySelector('.step-icon').innerText = '⏳';
+      };
+      const markActive = (id) => {
+        const el = document.getElementById(id);
+        el.className = 'p-3 rounded-xl bg-indigo-950/80 border border-indigo-500 flex flex-col gap-1 transition shadow-lg shadow-indigo-500/10';
+        el.querySelector('.step-icon').innerText = '🔄';
+      };
+      const markSuccess = (id, msg) => {
+        const el = document.getElementById(id);
+        el.className = 'p-3 rounded-xl bg-emerald-950/80 border border-emerald-600 flex flex-col gap-1 transition';
+        el.querySelector('.step-icon').innerText = '✅';
+        if (msg) el.querySelector('p').innerText = msg;
+      };
+      const markFailed = (id, msg) => {
+        const el = document.getElementById(id);
+        el.className = 'p-3 rounded-xl bg-rose-950/80 border border-rose-600 flex flex-col gap-1 transition';
+        el.querySelector('.step-icon').innerText = '❌';
+        if (msg) el.querySelector('p').innerText = msg;
+      };
+
+      resetStep('step-created');
+      resetStep('step-inventory');
+      resetStep('step-payment');
+      resetStep('step-terminal');
+
+      markSuccess('step-created', 'Order recorded (202 Accepted)');
+      markActive('step-inventory');
+
+      const startTime = Date.now();
+      if (sagaPollTimer) clearInterval(sagaPollTimer);
+
+      sagaPollTimer = setInterval(async () => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById('sagaTimer').innerText = `${elapsed}s elapsed`;
+
+        try {
+          const order = await API.request('GET', `/api/orders/${orderId}`);
+          const state = order.state;
+          document.getElementById('sagaStatusDetail').querySelector('span').innerText = `Current Saga state: ${state}`;
+
+          if (state === 'INVENTORY_RESERVED' || state === 'PAYMENT_PENDING') {
+            markSuccess('step-inventory', 'Stock reserved in DB');
+            markActive('step-payment');
+          } else if (state === 'CONFIRMED') {
+            markSuccess('step-inventory', 'Stock committed');
+            markSuccess('step-payment', 'Payment simulator approved');
+            markSuccess('step-terminal', 'Order Confirmed! Completed.');
+            clearInterval(sagaPollTimer);
+            showToast(`Order ${orderId} confirmed successfully!`);
+            loadOrders();
+            loadNotifications();
+          } else if (state === 'CANCELLED') {
+            const reason = order.cancellationReason || 'SAGA_ABORTED';
+            if (reason === 'INSUFFICIENT_STOCK') {
+              markFailed('step-inventory', 'Stock Insufficient');
+            } else {
+              markSuccess('step-inventory', 'Stock Released (Compensated)');
+              markFailed('step-payment', reason);
+            }
+            markFailed('step-terminal', `Cancelled: ${reason}`);
+            clearInterval(sagaPollTimer);
+            showToast(`Order was cancelled: ${reason}`, true);
+            loadOrders();
+            loadNotifications();
+          }
+        } catch (err) {
+          console.error(err);
+        }
+
+        if (elapsed > 60) {
+          clearInterval(sagaPollTimer);
+          document.getElementById('sagaStatusDetail').querySelector('span').innerText = 'Polling timed out (60s)';
+        }
+      }, 1000);
+    }
+
+    async function loadOrders() {
+      if (!API.token) return;
+      try {
+        const orders = await API.request('GET', '/api/orders?page=0&size=10');
+        const list = document.getElementById('ordersList');
+        if (!orders || orders.length === 0) {
+          list.innerHTML = `<div class="p-6 text-center text-slate-500 text-xs">No orders placed yet.</div>`;
+          return;
+        }
+        list.innerHTML = orders.map(o => `
+          <div class="p-4 rounded-xl glass-card flex items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs text-white font-bold">${o.id}</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  o.state === 'CONFIRMED' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                  o.state === 'CANCELLED' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                  'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }">${o.state}</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">${new Date(o.createdAt).toLocaleString()} • ${o.items ? o.items.length : 0} items</p>
+            </div>
+            <div class="text-right">
+              <span class="font-mono text-base font-bold text-white">$${Number(o.total).toFixed(2)}</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadNotifications() {
+      if (!API.token) return;
+      try {
+        const res = await API.request('GET', '/api/notifications');
+        const notifs = res.content || res || [];
+        const list = document.getElementById('notificationsList');
+        if (!notifs || notifs.length === 0) {
+          list.innerHTML = `<div class="p-6 text-center text-slate-500 text-xs">No notifications yet.</div>`;
+          return;
+        }
+        list.innerHTML = notifs.map(n => `
+          <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2">
+              <span class="p-1 rounded bg-indigo-500/20 text-indigo-400 font-bold text-[10px]">${n.kind}</span>
+              <span class="text-slate-200">${n.message}</span>
+            </div>
+            <span class="text-[10px] text-slate-400 font-mono">${new Date(n.createdAt).toLocaleTimeString()}</span>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Modal Handlers & Setup
+    function openAuthModal(mode = 'LOGIN') {
+      document.getElementById('authModal').classList.remove('hidden');
+      if (mode === 'LOGIN') {
+        document.getElementById('authModalTitle').innerText = 'Sign In';
+        document.getElementById('authTabLogin').classList.add('text-indigo-400', 'border-b-2', 'border-indigo-500');
+        document.getElementById('authTabRegister').classList.remove('text-indigo-400', 'border-b-2', 'border-indigo-500');
+        document.getElementById('authSubmitBtn').innerText = 'Sign In';
+      } else {
+        document.getElementById('authModalTitle').innerText = 'Create Customer Account';
+        document.getElementById('authTabRegister').classList.add('text-indigo-400', 'border-b-2', 'border-indigo-500');
+        document.getElementById('authTabLogin').classList.remove('text-indigo-400', 'border-b-2', 'border-indigo-500');
+        document.getElementById('authSubmitBtn').innerText = 'Create Account';
+      }
+    }
+
+    function openRestockModal(productId, productName) {
+      document.getElementById('restockProductId').value = productId;
+      document.getElementById('restockProductName').value = productName;
+      document.getElementById('restockModal').classList.remove('hidden');
+    }
+
+    // Quick Login Helpers
+    document.getElementById('quickCreateCustomer').addEventListener('click', async () => {
+      const email = `customer-${Math.floor(Math.random() * 10000)}@example.com`;
+      const password = 'Customer-Password-123!';
+      try {
+        await API.request('POST', '/api/auth/register', { email, password });
+        const tokenRes = await API.request('POST', '/api/auth/login', { email, password });
+        API.setAuth(tokenRes.accessToken, { id: 'current', email, role: 'CUSTOMER' });
+        showToast(`Created & signed in as ${email}`);
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    document.getElementById('quickLoginAdmin').addEventListener('click', async () => {
+      openAuthModal('LOGIN');
+      document.getElementById('authEmail').value = 'admin@example.com';
+      document.getElementById('authPassword').value = '';
+      showToast('Enter your configured ADMIN_PASSWORD from .env');
+    });
+
+    // Form Event Listeners
+    document.getElementById('authForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('authEmail').value;
+      const password = document.getElementById('authPassword').value;
+      const isLogin = document.getElementById('authModalTitle').innerText === 'Sign In';
+
+      try {
+        if (!isLogin) {
+          await API.request('POST', '/api/auth/register', { email, password });
+        }
+        const tokenRes = await API.request('POST', '/api/auth/login', { email, password });
+        API.token = tokenRes.accessToken;
+        // Fetch current profile using our new /api/auth/me endpoint!
+        let profile = { id: 'user', email, role: 'CUSTOMER' };
+        try {
+          profile = await API.request('GET', '/api/auth/me');
+        } catch (_) {}
+
+        API.setAuth(tokenRes.accessToken, profile);
+        document.getElementById('authModal').classList.add('hidden');
+        showToast(`Welcome back, ${email}!`);
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    document.getElementById('restockForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('restockProductId').value;
+      const quantity = parseInt(document.getElementById('restockQuantity').value, 10);
+      try {
+        await API.request('POST', `/api/inventory/${id}/restock`, { quantity }, crypto.randomUUID());
+        document.getElementById('restockModal').classList.add('hidden');
+        showToast(`Restocked ${quantity} units successfully!`);
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    document.getElementById('createProductForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const sku = document.getElementById('prodSku').value;
+      const category = document.getElementById('prodCategory').value;
+      const name = document.getElementById('prodName').value;
+      const description = document.getElementById('prodDesc').value;
+      const price = parseFloat(document.getElementById('prodPrice').value);
+      const initialStock = parseInt(document.getElementById('prodInitialStock').value, 10);
+
+      try {
+        const prod = await API.request('POST', '/api/products', { sku, category, name, description, price });
+        if (initialStock > 0) {
+          await API.request('POST', `/api/inventory/${prod.id}/restock`, { quantity: initialStock }, crypto.randomUUID());
+        }
+        document.getElementById('createProductModal').classList.add('hidden');
+        showToast(`Created product "${name}"!`);
+        loadProducts();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    // Category pills filter
+    document.querySelectorAll('.cat-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.cat-pill').forEach(b => b.className = 'cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition');
+        btn.className = 'cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-indigo-600 text-white transition';
+        loadProducts(btn.dataset.cat);
+      });
+    });
+
+    // Search bar with debounce
+    let searchTimeout;
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      const query = e.target.value.trim();
+      searchTimeout = setTimeout(async () => {
+        if (!query) { loadProducts(); return; }
+        try {
+          const res = await API.request('GET', `/api/search?q=${encodeURIComponent(query)}`);
+          renderProducts(res.content || []);
+          document.getElementById('productCountLabel').innerText = `Search returned ${res.totalElements || 0} hits`;
+        } catch (_) {
+          loadProducts();
+        }
+      }, 350);
+    });
+
+    // Simple event listeners for drawers & modals
+    document.getElementById('cartBtn').addEventListener('click', () => {
+      renderCartDrawer();
+      document.getElementById('cartDrawer').classList.remove('hidden');
+    });
+    document.getElementById('closeCartBtn').addEventListener('click', () => document.getElementById('cartDrawer').classList.add('hidden'));
+    document.getElementById('cartBackdrop').addEventListener('click', () => document.getElementById('cartDrawer').classList.add('hidden'));
+    document.getElementById('closeAuthModal').addEventListener('click', () => document.getElementById('authModal').classList.add('hidden'));
+    document.getElementById('authBackdrop').addEventListener('click', () => document.getElementById('authModal').classList.add('hidden'));
+    document.getElementById('checkoutBtn').addEventListener('click', executeSagaCheckout);
+    document.getElementById('closeSagaTracker').addEventListener('click', () => document.getElementById('sagaTracker').classList.add('hidden'));
+    document.getElementById('archBtn').addEventListener('click', () => document.getElementById('archModal').classList.remove('hidden'));
+    document.getElementById('closeArchModal').addEventListener('click', () => document.getElementById('archModal').classList.add('hidden'));
+    document.getElementById('archBackdrop').addEventListener('click', () => document.getElementById('archModal').classList.add('hidden'));
+    document.getElementById('adminNewProductBtn').addEventListener('click', () => document.getElementById('createProductModal').classList.remove('hidden'));
+    document.getElementById('closeCreateProductModal').addEventListener('click', () => document.getElementById('createProductModal').classList.add('hidden'));
+    document.getElementById('closeRestockModal').addEventListener('click', () => document.getElementById('restockModal').classList.add('hidden'));
+    document.getElementById('refreshProductsBtn').addEventListener('click', () => loadProducts());
+
+    // Tabs inside user activity
+    document.getElementById('tabOrdersBtn').addEventListener('click', () => {
+      document.getElementById('tabOrdersBtn').className = 'pb-3 text-indigo-400 border-b-2 border-indigo-500';
+      document.getElementById('tabNotificationsBtn').className = 'pb-3 text-slate-400 hover:text-slate-200';
+      document.getElementById('ordersTabContent').classList.remove('hidden');
+      document.getElementById('notificationsTabContent').classList.add('hidden');
+    });
+    document.getElementById('tabNotificationsBtn').addEventListener('click', () => {
+      document.getElementById('tabNotificationsBtn').className = 'pb-3 text-indigo-400 border-b-2 border-indigo-500';
+      document.getElementById('tabOrdersBtn').className = 'pb-3 text-slate-400 hover:text-slate-200';
+      document.getElementById('notificationsTabContent').classList.remove('hidden');
+      document.getElementById('ordersTabContent').classList.add('hidden');
+    });
+
+    // Initial load
+    renderAuth();
+    updateCartBadge();
+    loadProducts();
+  </script>
+</body>
+</html>

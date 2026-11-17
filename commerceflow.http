@@ -1,0 +1,202 @@
+### CommerceFlow API Collection (REST Client / IntelliJ / VS Code)
+### Base URL through Gateway: http://localhost:8080
+
+@baseUrl = http://localhost:8080
+@adminEmail = admin@example.com
+@adminPassword = Admin-Secret-Pass-123!
+@customerEmail = test-customer@example.com
+@customerPassword = Customer-Secret-Pass-123!
+
+### ========================================================
+### 1. HEALTH CHECKS
+### ========================================================
+
+### Gateway Health
+GET {{baseUrl}}/actuator/health
+
+### Gateway Prometheus Metrics
+GET {{baseUrl}}/actuator/prometheus
+
+### ========================================================
+### 2. AUTHENTICATION SERVICE
+### ========================================================
+
+### Register Customer
+# @name registerCustomer
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{customerEmail}}",
+  "password": "{{customerPassword}}"
+}
+
+### Login Customer
+# @name loginCustomer
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{customerEmail}}",
+  "password": "{{customerPassword}}"
+}
+
+### Store Customer Access Token
+@customerToken = {{loginCustomer.response.body.accessToken}}
+
+### Login Admin
+# @name loginAdmin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### Store Admin Access Token
+@adminToken = {{loginAdmin.response.body.accessToken}}
+
+### Get Current User Profile (NEW /api/auth/me)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{customerToken}}
+
+### ========================================================
+### 3. PRODUCT CATALOG SERVICE
+### ========================================================
+
+### List Products (Paginated)
+GET {{baseUrl}}/api/products?page=0&size=20&sort=newest
+
+### List Products by Category
+GET {{baseUrl}}/api/products?category=electronics
+
+### Create Product (Admin Only)
+# @name createProduct
+POST {{baseUrl}}/api/products
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "sku": "KB-AIR-001",
+  "name": "Wireless Ergonomic Split Keyboard",
+  "description": "Bluetooth 5.2, hot-swappable switches, low-latency mechanical keys",
+  "category": "electronics",
+  "price": 129.99
+}
+
+### Store Created Product ID
+@productId = {{createProduct.response.body.id}}
+
+### Get Product by ID
+GET {{baseUrl}}/api/products/{{productId}}
+
+### Update Product (Admin Only)
+PUT {{baseUrl}}/api/products/{{productId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "sku": "KB-AIR-001",
+  "name": "Wireless Ergonomic Split Keyboard Pro",
+  "description": "Bluetooth 5.2 + 2.4GHz wireless, hot-swappable tactile switches",
+  "category": "electronics",
+  "price": 149.99
+}
+
+### Delete / Soft Delete Product (Admin Only)
+DELETE {{baseUrl}}/api/products/{{productId}}
+Authorization: Bearer {{adminToken}}
+
+### ========================================================
+### 4. INVENTORY SERVICE
+### ========================================================
+
+### Get Product Stock
+GET {{baseUrl}}/api/inventory/{{productId}}
+Authorization: Bearer {{adminToken}}
+
+### Restock Product (Admin Only, Idempotent)
+POST {{baseUrl}}/api/inventory/{{productId}}/restock
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+{
+  "quantity": 25
+}
+
+### ========================================================
+### 5. ELASTICSEARCH SEARCH SERVICE
+### ========================================================
+
+### Full-Text Search
+GET {{baseUrl}}/api/search?q=mechanical&page=0&size=10
+
+### Filtered Search by Category and Price Range
+GET {{baseUrl}}/api/search?category=electronics&minPrice=50&maxPrice=200
+
+### ========================================================
+### 6. ORDER SERVICE & DISTRIBUTED SAGA
+### ========================================================
+
+### Place Order - Mode: SUCCESS (Happy Path)
+# @name createOrderSuccess
+POST {{baseUrl}}/api/orders
+Authorization: Bearer {{customerToken}}
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 1
+    }
+  ],
+  "paymentMode": "SUCCESS"
+}
+
+### Store Created Order ID
+@orderId = {{createOrderSuccess.response.body.id}}
+
+### Check Order State (Poll until CONFIRMED or CANCELLED)
+GET {{baseUrl}}/api/orders/{{orderId}}
+Authorization: Bearer {{customerToken}}
+
+### Place Order - Mode: DECLINE (Tests Saga Compensation / Inventory Release)
+# @name createOrderDecline
+POST {{baseUrl}}/api/orders
+Authorization: Bearer {{customerToken}}
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 1
+    }
+  ],
+  "paymentMode": "DECLINE"
+}
+
+### List Customer Orders
+GET {{baseUrl}}/api/orders?page=0&size=10
+Authorization: Bearer {{customerToken}}
+
+### ========================================================
+### 7. PAYMENT SERVICE
+### ========================================================
+
+### Get Payment Status for Order
+GET {{baseUrl}}/api/payments/orders/{{orderId}}
+Authorization: Bearer {{customerToken}}
+
+### ========================================================
+### 8. NOTIFICATION SERVICE
+### ========================================================
+
+### Get Customer Notifications
+GET {{baseUrl}}/api/notifications
+Authorization: Bearer {{customerToken}}
