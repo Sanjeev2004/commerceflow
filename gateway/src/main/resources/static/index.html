@@ -220,6 +220,7 @@
       <div class="border-b border-slate-800 flex gap-6 text-sm font-semibold">
         <button id="tabOrdersBtn" class="pb-3 text-indigo-400 border-b-2 border-indigo-500">My Orders</button>
         <button id="tabNotificationsBtn" class="pb-3 text-slate-400 hover:text-slate-200">Event Notifications</button>
+        <button id="tabAdminOrdersBtn" class="hidden pb-3 text-slate-400 hover:text-slate-200">All Orders (Admin)</button>
       </div>
 
       <div id="ordersTabContent">
@@ -228,6 +229,19 @@
 
       <div id="notificationsTabContent" class="hidden">
         <div id="notificationsList" class="flex flex-col gap-3"></div>
+      </div>
+
+      <div id="adminOrdersTabContent" class="hidden">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs text-slate-400">All customer orders across the platform (Live Database view)</span>
+          <select id="adminOrderFilter" class="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded px-2 py-1">
+            <option value="">All States</option>
+            <option value="CONFIRMED">CONFIRMED</option>
+            <option value="CANCELLED">CANCELLED</option>
+            <option value="PAYMENT_PENDING">PAYMENT_PENDING</option>
+          </select>
+        </div>
+        <div id="adminOrdersList" class="flex flex-col gap-3"></div>
       </div>
     </div>
   </main>
@@ -487,8 +501,16 @@ Client -> Gateway (:8080)
           document.getElementById('userActivitySection').classList.remove('hidden');
           loadOrders();
           loadNotifications();
+          loadBackendCart();
+          if (user.role === 'ADMIN') {
+            document.getElementById('tabAdminOrdersBtn').classList.remove('hidden');
+            loadAdminOrders();
+          } else {
+            document.getElementById('tabAdminOrdersBtn').classList.add('hidden');
+          }
         } else {
           document.getElementById('userActivitySection').classList.add('hidden');
+          document.getElementById('tabAdminOrdersBtn').classList.add('hidden');
         }
       },
 
@@ -585,9 +607,19 @@ Client -> Gateway (:8080)
       `).join('');
     }
 
-    function addToCart(productId) {
+    async function addToCart(productId) {
       const product = API.products.find(p => p.id === productId);
       if (!product) return;
+      if (API.token) {
+        try {
+          const res = await API.request('POST', '/api/cart/items', { productId, quantity: 1 });
+          syncCartFromBackend(res);
+          showToast(`Added "${product.name}" to cart (synced with Redis)`);
+          return;
+        } catch (err) {
+          console.warn('Backend cart sync failed, falling back to local', err);
+        }
+      }
       const existing = API.cart.find(c => c.productId === productId);
       if (existing) {
         existing.quantity += 1;
@@ -596,6 +628,28 @@ Client -> Gateway (:8080)
       }
       saveCart();
       showToast(`Added "${product.name}" to cart`);
+    }
+
+    function syncCartFromBackend(cartView) {
+      if (!cartView || !cartView.items) return;
+      API.cart = cartView.items.map(i => ({
+        productId: i.productId,
+        name: i.name,
+        price: i.unitPrice,
+        sku: '',
+        quantity: i.quantity
+      }));
+      saveCart();
+    }
+
+    async function loadBackendCart() {
+      if (!API.token) return;
+      try {
+        const res = await API.request('GET', '/api/cart');
+        syncCartFromBackend(res);
+      } catch (err) {
+        console.warn('Could not load cart from backend', err);
+      }
     }
 
     function saveCart() {
@@ -647,10 +701,27 @@ Client -> Gateway (:8080)
       document.getElementById('cartTotal').innerText = `$${total.toFixed(2)}`;
     }
 
-    function changeCartQty(idx, delta) {
+    async function changeCartQty(idx, delta) {
       if (!API.cart[idx]) return;
-      API.cart[idx].quantity += delta;
-      if (API.cart[idx].quantity <= 0) API.cart.splice(idx, 1);
+      const item = API.cart[idx];
+      const newQty = item.quantity + delta;
+      if (API.token) {
+        try {
+          if (newQty <= 0) {
+            const res = await API.request('DELETE', `/api/cart/items/${item.productId}`);
+            syncCartFromBackend(res);
+          } else {
+            const res = await API.request('PUT', `/api/cart/items/${item.productId}`, { quantity: newQty });
+            syncCartFromBackend(res);
+          }
+          renderCartDrawer();
+          return;
+        } catch (err) {
+          console.warn('Backend cart update failed', err);
+        }
+      }
+      item.quantity = newQty;
+      if (item.quantity <= 0) API.cart.splice(idx, 1);
       saveCart();
       renderCartDrawer();
     }
@@ -670,10 +741,18 @@ Client -> Gateway (:8080)
 
       const paymentMode = document.getElementById('checkoutPaymentMode').value;
       const idempotencyKey = crypto.randomUUID();
-      const items = API.cart.map(c => ({ productId: c.productId, quantity: c.quantity }));
 
       try {
-        const order = await API.request('POST', '/api/orders', { items, paymentMode }, idempotencyKey);
+        let order;
+        try {
+          // Checkout directly via Cart API
+          order = await API.request('POST', '/api/cart/checkout', { paymentMode }, idempotencyKey);
+        } catch (_) {
+          // Fallback to direct Order API
+          const items = API.cart.map(c => ({ productId: c.productId, quantity: c.quantity }));
+          order = await API.request('POST', '/api/orders', { items, paymentMode }, idempotencyKey);
+        }
+
         showToast(`Order accepted: ${order.id}`);
         // Clear cart
         API.cart = [];
@@ -825,6 +904,40 @@ Client -> Gateway (:8080)
               <span class="text-slate-200">${n.message}</span>
             </div>
             <span class="text-[10px] text-slate-400 font-mono">${new Date(n.createdAt).toLocaleTimeString()}</span>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadAdminOrders(state = '') {
+      if (!API.token || !API.user || API.user.role !== 'ADMIN') return;
+      try {
+        const path = state ? `/api/orders/admin?state=${encodeURIComponent(state)}` : '/api/orders/admin';
+        const orders = await API.request('GET', path);
+        const list = document.getElementById('adminOrdersList');
+        if (!orders || orders.length === 0) {
+          list.innerHTML = `<div class="p-6 text-center text-slate-500 text-xs">No orders found matching filter.</div>`;
+          return;
+        }
+        list.innerHTML = orders.map(o => `
+          <div class="p-4 rounded-xl glass-card flex items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs text-white font-bold">${o.id}</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  o.state === 'CONFIRMED' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                  o.state === 'CANCELLED' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                  'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }">${o.state}</span>
+                <span class="text-[10px] font-mono text-slate-400">User: ${o.userId.substring(0,8)}...</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">${new Date(o.createdAt).toLocaleString()} • ${o.items ? o.items.length : 0} items ${o.cancellationReason ? '• Reason: ' + o.cancellationReason : ''}</p>
+            </div>
+            <div class="text-right">
+              <span class="font-mono text-base font-bold text-white">$${Number(o.total).toFixed(2)}</span>
+            </div>
           </div>
         `).join('');
       } catch (err) {
@@ -986,14 +1099,30 @@ Client -> Gateway (:8080)
     document.getElementById('tabOrdersBtn').addEventListener('click', () => {
       document.getElementById('tabOrdersBtn').className = 'pb-3 text-indigo-400 border-b-2 border-indigo-500';
       document.getElementById('tabNotificationsBtn').className = 'pb-3 text-slate-400 hover:text-slate-200';
+      document.getElementById('tabAdminOrdersBtn').className = 'pb-3 text-slate-400 hover:text-slate-200';
       document.getElementById('ordersTabContent').classList.remove('hidden');
       document.getElementById('notificationsTabContent').classList.add('hidden');
+      document.getElementById('adminOrdersTabContent').classList.add('hidden');
     });
     document.getElementById('tabNotificationsBtn').addEventListener('click', () => {
       document.getElementById('tabNotificationsBtn').className = 'pb-3 text-indigo-400 border-b-2 border-indigo-500';
       document.getElementById('tabOrdersBtn').className = 'pb-3 text-slate-400 hover:text-slate-200';
+      document.getElementById('tabAdminOrdersBtn').className = 'pb-3 text-slate-400 hover:text-slate-200';
       document.getElementById('notificationsTabContent').classList.remove('hidden');
       document.getElementById('ordersTabContent').classList.add('hidden');
+      document.getElementById('adminOrdersTabContent').classList.add('hidden');
+    });
+    document.getElementById('tabAdminOrdersBtn').addEventListener('click', () => {
+      document.getElementById('tabAdminOrdersBtn').className = 'pb-3 text-indigo-400 border-b-2 border-indigo-500';
+      document.getElementById('tabOrdersBtn').className = 'pb-3 text-slate-400 hover:text-slate-200';
+      document.getElementById('tabNotificationsBtn').className = 'pb-3 text-slate-400 hover:text-slate-200';
+      document.getElementById('adminOrdersTabContent').classList.remove('hidden');
+      document.getElementById('ordersTabContent').classList.add('hidden');
+      document.getElementById('notificationsTabContent').classList.add('hidden');
+      loadAdminOrders(document.getElementById('adminOrderFilter').value);
+    });
+    document.getElementById('adminOrderFilter').addEventListener('change', (e) => {
+      loadAdminOrders(e.target.value);
     });
 
     // Initial load

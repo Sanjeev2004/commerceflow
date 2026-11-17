@@ -34,6 +34,7 @@ public class OrderService {
     }
     public View get(UUID id,UUID userId) { return orders.view(orders.find(id,false).filter(o->o.userId().equals(userId)).orElseThrow(()->ApiException.notFound("Order not found"))); }
     public List<View> list(UUID userId,int page,int size) { return orders.list(userId,page,size); }
+    public List<View> listAll(String state,int page,int size) { return orders.listAll(state,page,size); }
     private String hash(String value) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
         catch(NoSuchAlgorithmException ex) { throw new IllegalStateException(ex); }

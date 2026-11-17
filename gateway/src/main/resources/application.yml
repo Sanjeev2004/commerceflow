@@ -39,6 +39,9 @@ spring:
         - id: orders
           uri: ${ORDER_URL:http://localhost:8084}
           predicates: [Path=/api/orders/**]
+        - id: cart
+          uri: ${ORDER_URL:http://localhost:8084}
+          predicates: [Path=/api/cart/**]
         - id: payments
           uri: ${PAYMENT_URL:http://localhost:8085}
           predicates: [Path=/api/payments/**]

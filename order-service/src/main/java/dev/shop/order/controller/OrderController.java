@@ -20,4 +20,9 @@ public class OrderController {
     }
     @GetMapping("/{id}") public View get(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id) { return orders.get(id,UUID.fromString(jwt.getSubject())); }
     @GetMapping public List<View> list(@AuthenticationPrincipal Jwt jwt,@RequestParam(defaultValue="0") @Min(0) @Max(10000) int page,@RequestParam(defaultValue="20") @Min(1) @Max(100) int size) { return orders.list(UUID.fromString(jwt.getSubject()),page,size); }
+    @GetMapping("/admin")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    public List<View> listAll(@RequestParam(required=false) String state,@RequestParam(defaultValue="0") @Min(0) @Max(10000) int page,@RequestParam(defaultValue="20") @Min(1) @Max(100) int size) {
+        return orders.listAll(state,page,size);
+    }
 }

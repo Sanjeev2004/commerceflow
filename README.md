@@ -113,9 +113,15 @@ All requests route through Gateway at `http://localhost:8080`.
 | `DELETE` | `/api/products/{id}` | Admin | Soft delete product |
 | `GET` | `/api/inventory/{productId}`| Authenticated | Available & reserved inventory quantities |
 | `POST` | `/api/inventory/{id}/restock`| Admin | Add stock (`Idempotency-Key` header) |
-| `POST` | `/api/orders` | Customer | Initiate Saga checkout (returns `202 Accepted`) |
+| `GET` | `/api/cart` | Customer | Get customer's shopping cart (Redis-backed) |
+| `POST` | `/api/cart/items` | Customer | Add/increment product in shopping cart |
+| `PUT` | `/api/cart/items/{productId}`| Customer | Update product quantity in cart |
+| `DELETE` | `/api/cart/items/{productId}`| Customer | Remove product from cart |
+| `POST` | `/api/cart/checkout` | Customer | Checkout from cart (initiates Saga, clears cart) |
+| `POST` | `/api/orders` | Customer | Initiate Saga checkout directly (returns `202 Accepted`) |
 | `GET` | `/api/orders` | Customer | List customer orders |
 | `GET` | `/api/orders/{id}` | Customer | Get order status (`CONFIRMED`, `CANCELLED`, etc.) |
+| `GET` | `/api/orders/admin` | Admin | List all platform orders (supports `?state=...` filter) |
 | `GET` | `/api/payments/orders/{id}`| Customer | Inspect payment outcome |
 | `GET` | `/api/search` | Public | Elasticsearch query (`q`, `category`, `minPrice`, `maxPrice`) |
 | `GET` | `/api/notifications` | Customer | Order notification feed |

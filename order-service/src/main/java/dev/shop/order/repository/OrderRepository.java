@@ -31,4 +31,10 @@ public class OrderRepository {
     private void history(UUID id,OrderState state) { jdbc.update("INSERT INTO order_transitions(order_id,state) VALUES (?,?)",id,state.name()); }
     public View view(Stored order) { return new View(order.id(),order.userId(),order.state(),order.data().total(),order.data().lines(),order.reason(),order.createdAt(),order.updatedAt(),jdbc.query("SELECT state FROM order_transitions WHERE order_id=? ORDER BY id",(r,n)->r.getString(1),order.id())); }
     public List<View> list(UUID userId,int page,int size) { return jdbc.query("SELECT * FROM orders WHERE user_id=? ORDER BY created_at DESC,id LIMIT ? OFFSET ?",row(),userId,size,(long)page*size).stream().map(this::view).toList(); }
+    public List<View> listAll(String state, int page, int size) {
+        if (state != null && !state.isBlank()) {
+            return jdbc.query("SELECT * FROM orders WHERE state=? ORDER BY created_at DESC,id LIMIT ? OFFSET ?", row(), state, size, (long)page*size).stream().map(this::view).toList();
+        }
+        return jdbc.query("SELECT * FROM orders ORDER BY created_at DESC,id LIMIT ? OFFSET ?", row(), size, (long)page*size).stream().map(this::view).toList();
+    }
 }

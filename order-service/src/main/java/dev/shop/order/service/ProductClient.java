@@ -12,7 +12,7 @@ import org.springframework.web.client.*;
 @Component
 public class ProductClient {
     private final RestClient client;
-    public record Quote(UUID id,BigDecimal price,boolean active) {}
+    public record Quote(UUID id, String sku, String name, BigDecimal price, boolean active) {}
     public ProductClient(@Value("${commerce.product-url}") String baseUrl) {
         var factory=new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()); factory.setReadTimeout(Duration.ofSeconds(2));
         client=RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();

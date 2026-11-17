@@ -137,7 +137,52 @@ GET {{baseUrl}}/api/search?q=mechanical&page=0&size=10
 GET {{baseUrl}}/api/search?category=electronics&minPrice=50&maxPrice=200
 
 ### ========================================================
-### 6. ORDER SERVICE & DISTRIBUTED SAGA
+### 6. SHOPPING CART (REDIS-BACKED)
+### ========================================================
+
+### Get Current User Cart
+GET {{baseUrl}}/api/cart
+Authorization: Bearer {{customerToken}}
+
+### Add Item to Cart
+POST {{baseUrl}}/api/cart/items
+Authorization: Bearer {{customerToken}}
+Content-Type: application/json
+
+{
+  "productId": "{{productId}}",
+  "quantity": 2
+}
+
+### Update Cart Item Quantity
+PUT {{baseUrl}}/api/cart/items/{{productId}}
+Authorization: Bearer {{customerToken}}
+Content-Type: application/json
+
+{
+  "quantity": 1
+}
+
+### Checkout from Cart (Triggers Saga & Empties Cart)
+POST {{baseUrl}}/api/cart/checkout
+Authorization: Bearer {{customerToken}}
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+{
+  "paymentMode": "SUCCESS"
+}
+
+### Remove Item from Cart
+DELETE {{baseUrl}}/api/cart/items/{{productId}}
+Authorization: Bearer {{customerToken}}
+
+### Clear Cart
+DELETE {{baseUrl}}/api/cart
+Authorization: Bearer {{customerToken}}
+
+### ========================================================
+### 7. ORDER SERVICE & DISTRIBUTED SAGA
 ### ========================================================
 
 ### Place Order - Mode: SUCCESS (Happy Path)
@@ -184,6 +229,14 @@ Content-Type: application/json
 ### List Customer Orders
 GET {{baseUrl}}/api/orders?page=0&size=10
 Authorization: Bearer {{customerToken}}
+
+### List All Orders (Admin View)
+GET {{baseUrl}}/api/orders/admin?page=0&size=20
+Authorization: Bearer {{adminToken}}
+
+### Filter All Orders by State (Admin View)
+GET {{baseUrl}}/api/orders/admin?state=CONFIRMED
+Authorization: Bearer {{adminToken}}
 
 ### ========================================================
 ### 7. PAYMENT SERVICE
