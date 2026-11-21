@@ -25,6 +25,5 @@ COPY --from=build /workspace/cloud-service/target/cloud-service-1.0.0-SNAPSHOT.j
 USER app
 ENV PORT=8080
 EXPOSE 8080
-HEALTHCHECK --interval=15s --timeout=5s --start-period=180s --retries=12 \
-  CMD-SHELL wget -q -O /dev/null http://127.0.0.1:${PORT}/health || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --start-period=180s --retries=12 CMD wget -q -O /dev/null http://127.0.0.1:${PORT:-8080}/health || exit 1
 ENTRYPOINT ["java", "-Xmx160m", "-XX:MaxMetaspaceSize=128m", "-XX:ReservedCodeCacheSize=32m", "-Xss256k", "-XX:+ExitOnOutOfMemoryError", "-jar", "app.jar"]
