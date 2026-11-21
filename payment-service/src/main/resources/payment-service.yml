@@ -1,11 +1,12 @@
 spring:
   application:
-    name: search-service
+    name: payment-service
   config:
     import: classpath:commerce-defaults.yml
+  flyway:
+    locations: classpath:db/common,classpath:db/migration-payment
 server:
-  port: ${PORT:8086}
+  port: ${PORT:8085}
 commerce:
   messaging:
     enabled: true
-  elasticsearch-url: ${ELASTICSEARCH_URL:http://localhost:9200}

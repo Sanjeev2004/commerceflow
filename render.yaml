@@ -1,0 +1,42 @@
+# One free web service, free Postgres, and free Key Value.
+# Checkout runs in-process. Elasticsearch search stays on Docker Compose.
+services:
+  - type: web
+    name: commerceflow
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./cloud/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: commerceflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: commerceflow-redis
+          property: connectionString
+      - key: ADMIN_EMAIL
+        value: admin@example.com
+      - key: ADMIN_PASSWORD
+        value: Demo-admin-pass-123
+
+  - type: keyvalue
+    name: commerceflow-redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: demo access
+
+databases:
+  - name: commerceflow-db
+    plan: free
+    region: oregon
+    databaseName: commerceflow

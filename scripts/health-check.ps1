@@ -3,7 +3,7 @@ param(
 )
 
 $services = @(
-    @{ Name = "API Gateway";            Url = "$GatewayUrl/actuator/health" },
+    @{ Name = "API Gateway";            Url = "http://localhost:9080/actuator/health" },
     @{ Name = "Auth Service";           Url = "http://localhost:9081/actuator/health" },
     @{ Name = "Product Service";        Url = "http://localhost:9082/actuator/health" },
     @{ Name = "Inventory Service";      Url = "http://localhost:9083/actuator/health" },

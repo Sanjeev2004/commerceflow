@@ -3,6 +3,8 @@ spring:
     name: inventory-service
   config:
     import: classpath:commerce-defaults.yml
+  flyway:
+    locations: classpath:db/common,classpath:db/migration-inventory
 server:
   port: ${PORT:8083}
 commerce:

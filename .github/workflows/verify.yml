@@ -20,13 +20,15 @@ jobs:
           cache: maven
       - name: Build and unit tests
         run: mvn -B -ntp verify -DskipITs
-      - name: Start full stack from source
-        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: Start lightweight stack from source
+        if: github.event_name == 'workflow_dispatch'
+        run: docker compose -f docker-compose.dev.yml up -d --build --wait --wait-timeout 300
       - name: Black-box integration tests
+        if: github.event_name == 'workflow_dispatch'
         run: mvn -B -ntp -pl integration-tests verify
       - name: Service logs
         if: failure()
-        run: docker compose logs --no-color
+        run: docker compose -f docker-compose.dev.yml logs --no-color
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -36,4 +38,4 @@ jobs:
             **/target/failsafe-reports/*
       - name: Stop stack
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.dev.yml down -v

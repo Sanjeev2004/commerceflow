@@ -40,7 +40,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeExchange(a -> a
                         .pathMatchers(HttpMethod.OPTIONS).permitAll()
-                        .pathMatchers("/", "/index.html", "/favicon.ico", "/css/**", "/js/**", "/web/**", "/actuator/health/**", "/actuator/prometheus").permitAll()
+                        .pathMatchers("/", "/index.html", "/favicon.ico", "/health", "/css/**", "/js/**", "/web/**", "/actuator/health/**", "/actuator/prometheus").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .pathMatchers(HttpMethod.GET, "/api/products/**", "/api/search/**").permitAll()
                         .anyExchange().authenticated())

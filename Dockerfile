@@ -14,6 +14,7 @@ COPY search-service/pom.xml search-service/
 COPY notification-service/pom.xml notification-service/
 COPY gateway/pom.xml gateway/
 COPY integration-tests/pom.xml integration-tests/
+COPY cloud-service/pom.xml cloud-service/
 
 # Pre-fetch dependencies (cached unless a pom.xml changes)
 RUN mvn -B -ntp dependency:go-offline -DskipTests || true
@@ -23,10 +24,11 @@ COPY . .
 RUN mvn -B -ntp package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine
-RUN addgroup -S app && adduser -S app -G app
+RUN apk add --no-cache wget \
+ && addgroup -S app && adduser -S app -G app
 WORKDIR /app
 ARG SERVICE
-COPY --from=build /workspace/${SERVICE}/target/${SERVICE}-1.0.0-SNAPSHOT.jar app.jar
+COPY --from=build /workspace/${SERVICE}/target/${SERVICE}-1.0.0-SNAPSHOT-exec.jar app.jar
 USER app
 HEALTHCHECK --interval=10s --timeout=5s --start-period=90s --retries=12 CMD wget -q -O /dev/null http://localhost:9090/actuator/health/readiness || exit 1
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=65.0", "-jar", "app.jar"]

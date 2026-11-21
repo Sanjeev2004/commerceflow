@@ -15,7 +15,7 @@ check_service() {
     fi
 }
 
-check_service "API Gateway"          "$GATEWAY_URL/actuator/health"
+check_service "API Gateway"          "${MANAGEMENT_GATEWAY_URL:-http://localhost:9080}/actuator/health"
 check_service "Auth Service"         "http://localhost:9081/actuator/health"
 check_service "Product Service"      "http://localhost:9082/actuator/health"
 check_service "Inventory Service"    "http://localhost:9083/actuator/health"

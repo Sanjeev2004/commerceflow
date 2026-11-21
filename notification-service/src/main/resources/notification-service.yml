@@ -3,6 +3,8 @@ spring:
     name: notification-service
   config:
     import: classpath:commerce-defaults.yml
+  flyway:
+    locations: classpath:db/common,classpath:db/migration-notification
 server:
   port: ${PORT:8087}
 commerce:

@@ -82,6 +82,19 @@ class CartServiceTest {
     }
 
     @Test
+    void addItemRejectsQuantityThatWouldExceedLimit() {
+        var userId = UUID.randomUUID();
+        var productId = UUID.randomUUID();
+        when(products.quote(productId)).thenReturn(new ProductClient.Quote(productId, "KB-1", "Keyboard", BigDecimal.valueOf(50.00), true));
+        when(hashOps.get("cart:" + userId, productId.toString())).thenReturn("1000");
+
+        var ex = assertThrows(ApiException.class, () -> cart.addItem(userId, new AddItem(productId, 1)));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.status());
+        verify(hashOps, never()).increment(anyString(), anyString(), anyLong());
+    }
+
+    @Test
     void checkoutThrowsBadRequestWhenCartIsEmpty() {
         var userId = UUID.randomUUID();
         when(hashOps.entries("cart:" + userId)).thenReturn(Collections.emptyMap());

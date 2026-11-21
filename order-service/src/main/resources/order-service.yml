@@ -3,6 +3,8 @@ spring:
     name: order-service
   config:
     import: classpath:commerce-defaults.yml
+  flyway:
+    locations: classpath:db/common,classpath:db/migration-order
 server:
   port: ${PORT:8084}
 commerce:

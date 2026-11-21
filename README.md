@@ -1,6 +1,16 @@
 # CommerceFlow
 
-A modern, production-grade distributed e-commerce platform built with **Java 21** and **Spring Boot 3.4**, featuring an asynchronous checkout Saga orchestrated across Kafka, an API Gateway with rate limiting & CORS, transactional outbox relays with inbox deduplication, Elasticsearch full-text search, Redis caching, Prometheus/Grafana observability, and an **interactive Web Storefront & Saga visualizer**.
+CommerceFlow is a small online shop built as a set of Java services. A customer can register, browse products, keep a cart, and check out. Checkout is a distributed transaction: the order is accepted immediately, stock is reserved, a simulated payment runs, and the order is either confirmed or cancelled with the stock put back.
+
+## Problem this project solves
+
+A shop cannot safely take payment in one database while stock lives in another. If payment fails after the stock was already decremented, the catalog is wrong. If stock is decremented only after payment, two customers can buy the last item. CommerceFlow is a portfolio implementation of that problem: several services, each with its own data, agreeing on one checkout result.
+
+## How it solves it
+
+The browser talks only to the API gateway on port 8080. The gateway checks the JWT, applies a Redis rate limit, and forwards the call. Auth, catalog, inventory, orders, payments, search, and notifications are separate Spring Boot services. Each one owns a Postgres database.
+
+Checkout does not update all of those databases in one request. The order service stores the order and an outbox row in the same transaction, then returns `202 Accepted`. A relay publishes the outbox to Kafka. Inventory reserves stock and answers with a reserved or rejected event. Payment then simulates success, decline, or cancel. The order service confirms the order or asks inventory to release the stock. Consumers record event ids so a duplicate delivery is ignored.
 
 ```text
                                   ┌───────────────────────────────┐
@@ -24,9 +34,35 @@ A modern, production-grade distributed e-commerce platform built with **Java 21*
                                       (commerce.events)
 ```
 
----
+The storefront is served by the gateway at `/`. Product text is escaped before it is inserted into the page. Cart lines live in Redis. Search reads an Elasticsearch projection of the catalog. Prometheus and Grafana are in the full Compose stack.
 
-## ✨ Key Features & Architecture
+## What changed in this revision
+
+About **19%** of the repository changed by line count (lines added or edited compared with the previous revision). The service boundaries, saga states, and storefront layout are the same.
+
+- **Hosted demo.** `cloud-service` starts the gateway, auth, catalog, inventory, orders, payments, and notifications in one process. Render supplies one Postgres database (a schema per service) and one Key Value instance. With Kafka turned off, the same outbox rows are delivered in-process, so checkout still confirms or cancels. `render.yaml` and `cloud/Dockerfile` are the deploy files. The image listens on `PORT` and exposes `/health`.
+- **Validation.** Cart updates cannot push a line past 1000 units, and order creation checks quantity, item count, and the idempotency key even when checkout does not pass through the controller. An unknown admin order state returns 400.
+- **Rate limit.** The gateway token bucket now refills at 10 auth requests per minute and 40 API requests per minute, which is what this README already described.
+- **Operations.** Compose health checks install `wget`. The health scripts call the gateway actuator on port 9080. Each service loads its own config file, and Flyway scripts live in separate folders so one classpath can migrate one schema. Local `.env.example` values are filled in so a copied env file can boot.
+- **CI.** Every push and pull request compiles and runs the unit tests. The Docker Compose integration run is available with a manual workflow dispatch, using the lighter dev stack.
+
+## What works
+
+- Unit tests: `mvn -B -ntp verify -DskipITs`.
+- Local Docker Compose, both the single-Postgres dev file and the full multi-database file: register, catalog, cart, checkout saga over Kafka, search, and notifications.
+- The single-process demo against Postgres and Redis: `/health`, the storefront, register, login, seeded catalog, cart, checkout to `CONFIRMED` or `CANCELLED`, and the notification feed. This was run locally with the same jars Render builds.
+
+## What doesn't work yet / known limitations
+
+- The hosted demo does not run Elasticsearch, so `/api/search` returns 503 there. Search works in Docker Compose.
+- The hosted demo does not run Kafka, Prometheus, or Grafana. Checkout events move inside the process instead of across a broker.
+- Render's free web service has 512 MB of RAM and sleeps after 15 minutes without traffic. The demo process is about 450 MB, so there is little headroom. A cold start takes about a minute. If the service is killed for memory, change the web service plan in `render.yaml` from `free` to `1c-2g` (that plan is paid).
+- Render's free Postgres database expires 30 days after it is created. Create a new one, or move it to a paid plan, when that happens. The free Key Value instance is not durable.
+- The demo admin password in `render.yaml` is `Demo-admin-pass-123`. It is there so the catalog can be seeded on first boot. Change `ADMIN_PASSWORD` in the Render dashboard before treating the site as private. The JWT signing key is generated by Render and is not in git.
+- Free web services on Render cannot receive private network calls, so this project is deployed as one process rather than eight public services.
+- The full Compose stack is the one that shows separate databases, Kafka dead-letter topics, and the Grafana dashboard. It wants several gigabytes of RAM (the dev file is the smaller one).
+
+## Key features in the local stack
 
 - **Choreographed Checkout Saga**: Resilient distributed transaction across Order, Inventory, and Payment services using Kafka events.
 - **Transactional Outbox & Deduplicating Inbox**: At-least-once event delivery guarantee with exactly-once consumer semantics and per-service Dead-Letter Topics (`.DLT`).
@@ -45,26 +81,41 @@ A modern, production-grade distributed e-commerce platform built with **Java 21*
 ## 🚀 Quick Start
 
 ### 1. Configure Environment
-Copy `.env.example` to `.env`:
+
+The example file already contains local-only defaults. Replace them before any shared machine.
+
+```bash
+cp .env.example .env
+```
+
 ```powershell
 Copy-Item .env.example .env
 ```
-Fill `POSTGRES_PASSWORD`, `JWT_SECRET` (at least 32 characters), `GRAFANA_PASSWORD`, and optionally `ADMIN_EMAIL` and `ADMIN_PASSWORD`.
+
+`JWT_SECRET` must be at least 32 characters. `ADMIN_EMAIL` and `ADMIN_PASSWORD` are optional; leave both blank to skip the bootstrap admin. The admin password, when set, must be at least 12 characters.
 
 ### 2. Choose Your Deployment Mode
 
 #### Option A: Lightweight Development Mode (Recommended, ~1.5 GB RAM)
 Uses a single consolidated PostgreSQL instance hosting isolated databases for each microservice:
-```powershell
-.\scripts\run.ps1 dev
-# or: docker compose -f docker-compose.dev.yml up -d --build --wait
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build --wait
 ```
 
-#### Option B: Full Production-Grade Mode (~8 GB RAM)
-Runs 18 distinct containers with dedicated PostgreSQL instances per service:
+```powershell
+.\scripts\run.ps1 dev
+```
+
+#### Option B: Full multi-database mode (~8 GB RAM)
+Runs separate PostgreSQL instances per service, plus Prometheus and Grafana.
+
+```bash
+docker compose up -d --build --wait --wait-timeout 300
+```
+
 ```powershell
 .\scripts\run.ps1 up
-# or: docker compose up -d --build --wait --wait-timeout 300
 ```
 
 ### 3. Open the Web Storefront
@@ -126,7 +177,7 @@ All requests route through Gateway at `http://localhost:8080`.
 | `GET` | `/api/search` | Public | Elasticsearch query (`q`, `category`, `minPrice`, `maxPrice`) |
 | `GET` | `/api/notifications` | Customer | Order notification feed |
 
-> 💡 **Tip:** A complete collection of ready-to-run API requests is available in [`commerceflow.http`](file:///commerceflow.http) for VS Code REST Client or IntelliJ HTTP Client.
+A ready-to-run request collection is in [`commerceflow.http`](commerceflow.http) for the VS Code REST Client or the IntelliJ HTTP Client.
 
 ---
 
@@ -153,7 +204,42 @@ Customer                     Order Service        Inventory Service     Payment 
 
 ---
 
-## 🧪 Testing & Verification
+## Deploy on Render
+
+Render is the host for a public URL because it supports Google sign-in, a free Postgres database, and a free Key Value (Redis-compatible) instance. The free tier cannot run Kafka, Elasticsearch, and eight separate JVMs, and free web services cannot call each other on the private network. The blueprint therefore runs the single-process demo.
+
+Apply the blueprint from the dashboard after signing in with Google. A free web service shares the workspace's monthly free hours with any other free services already running there.
+
+1. Open [https://dashboard.render.com](https://dashboard.render.com) and choose **Sign in with Google**.
+2. Click **New**, then **Blueprint**.
+3. Connect GitHub if Render asks, and grant access to `Sanjeev2004/commerceflow`.
+4. Select that repository. When a branch is requested, choose `improvements` until it is merged, then use `main`.
+5. Render reads `render.yaml`. Confirm three resources, all in **Oregon**, all on the **Free** plan:
+   - Web service `commerceflow` (Docker, health check path `/health`)
+   - Postgres `commerceflow-db` (database name `commerceflow`)
+   - Key Value `commerceflow-redis`
+6. Click **Apply**. The first Docker build compiles the Maven reactor and can take several minutes. The free web service then sleeps after 15 idle minutes; the first request after that takes about a minute.
+7. Open the `onrender.com` URL shown on the web service page. `/` is the storefront. `/health` returns `{"status":"UP"}` when Redis answers.
+8. Sign in on the storefront as `admin@example.com` / `Demo-admin-pass-123`. The catalog is seeded on first boot. Change that password in the service's **Environment** tab if the admin account should not be public, then redeploy.
+
+Environment variables set by the blueprint:
+
+| Variable | Value |
+|---|---|
+| `PORT` | Set by Render. The process listens on it. |
+| `JWT_SECRET` | Generated by Render. At least 32 characters. Not stored in git. |
+| `DATABASE_URL` | Internal connection string of `commerceflow-db`. |
+| `REDIS_URL` | Internal connection string of `commerceflow-redis`. |
+| `ADMIN_EMAIL` | `admin@example.com` |
+| `ADMIN_PASSWORD` | `Demo-admin-pass-123` |
+
+No other variables are required. `DATABASE_URL` and `REDIS_URL` must be the internal URLs from the same region so the free web service can reach them.
+
+## Testing
+
+```bash
+mvn -B -ntp verify -DskipITs
+```
 
 ```powershell
 # 1. Run unit tests

@@ -21,7 +21,8 @@ public class RateLimitFilter implements WebFilter,Ordered {
         String ip=exchange.getRequest().getRemoteAddress()==null?"unknown":exchange.getRequest().getRemoteAddress().getAddress().getHostAddress();
         return exchange.getPrincipal().map(Principal::getName).defaultIfEmpty("ip:"+ip).flatMap(identity-> {
             String key="rate:"+(auth?"auth:":"api:")+identity;
-            return redis.execute(script,List.of(key),List.of(auth?"5":"20",auth?"10":"40")).single()
+            // Token bucket refill is tokens per second. Bursts match the published per-minute limits.
+            return redis.execute(script,List.of(key),List.of(auth?"0.1666667":"0.6666667",auth?"10":"40")).single()
                     .map(result->((Number)result.getFirst()).longValue()==1)
                     .onErrorMap(ex->new ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,"Rate limiter unavailable",ex))
                     .flatMap(allowed->{

@@ -3,6 +3,8 @@ spring:
     name: auth-service
   config:
     import: classpath:commerce-defaults.yml
+  flyway:
+    locations: classpath:db/common,classpath:db/migration-auth
 server:
   port: ${PORT:8081}
 auth:
